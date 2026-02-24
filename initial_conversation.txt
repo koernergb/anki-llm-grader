@@ -1,0 +1,1654 @@
+
+
+You said:
+i really wish anki had the functionality of you type in your answer then ai checks if its right. should we fork anki and add features like this
+
+ChatGPT said:
+Yes — but I’d only fork Anki if you want to become a maintainer. For what you want (“type an answer → AI checks if it’s right”), you can ship this much faster as an Anki add-on, and only fork later if you hit hard limits.
+
+Why an add-on first (almost always)
+Anki already supports typed answers ({{type:Field}}). What’s missing is grading. An add-on can intercept review events, grab:
+
+the prompt fields (Front / Extra)
+
+the user’s typed response
+
+the canonical answer (Back / Answer field)
+
+optional “acceptable variants” field
+
+Then it can call an LLM to judge semantic correctness and return a score + feedback.
+
+You can iterate without owning upstream merge conflicts, cross-platform build issues, etc.
+
+When a fork is actually worth it
+Forking makes sense if you want any of these:
+
+Core UI changes deeply integrated into reviewer (new buttons, new “explain my grade” panel, better offline handling)
+
+On-device inference or heavy caching + background precompute integrated into core
+
+First-class sync behavior for AI metadata (grading rubric, accepted variants, etc.)
+
+Otherwise: add-on.
+
+What “AI grading” needs to feel good
+If you build this, the difference between “cute demo” and “actually useful” is:
+
+Rubric control
+
+“Strict” vs “lenient”
+
+“Must include keywords: ___”
+
+“Allow synonyms / paraphrase”
+
+“Reject if missing crucial constraint”
+
+Deterministic-ish results
+
+Use structured output: {verdict: correct|partial|incorrect, score: 0-1, missing: [...], notes: "..."}
+
+Keep temperature low
+
+Cache by (card_id, user_answer_hash)
+
+Cost + latency
+
+Only grade when user hits a “Grade with AI” hotkey, OR
+
+Auto-grade only on cards tagged ai::grade
+
+Batch requests when possible
+
+Local fallback: simple string/keyword matching if offline
+
+Privacy
+
+Let users opt out per-deck.
+
+Redact fields like “Personal” or “Diary” by tag.
+
+Show exactly what gets sent.
+
+A realistic path (fastest to “working”)
+Phase 0 (1 evening): Proof-of-concept add-on
+
+Adds a hotkey: Ctrl+Enter = “AI Grade”
+
+Shows verdict + “missing concept” bullets
+
+Maps verdict → Again/Hard/Good/Easy suggestion
+
+Phase 1 (1–2 weeks): Make it dependable
+
+Settings UI: model/provider, strictness, max tokens, privacy filters
+
+Field mapping UI (“Answer field is ___”)
+
+Caching + rate limiting
+
+Per-deck/tag enablement
+
+Phase 2: Productize
+
+Exportable rubrics per deck
+
+“Accepted answers” field auto-generated
+
+Analytics: “concepts you consistently miss”
+
+Big gotchas (so you don’t get burned)
+Hallucinated grading: models can confidently mark wrong answers as right unless you force a rubric and require citing missing elements.
+
+Math / code: needs specialized checking (symbolic equivalence, unit tests, etc.) instead of pure semantic judging.
+
+Language learning: you’ll want “minor typo tolerance” + morphology support.
+
+Anki review flow: you must avoid breaking timing / answer reveal logic or users will hate it.
+
+My recommendation for you specifically (based on how you study)
+Given you’re using Anki for EECS 281/370 concepts + LeetCode patterns, I’d do:
+
+Add-on first, with two modes:
+
+Concept cards: semantic rubric grading (“did you mention X/Y/Z?”)
+
+LeetCode cards: grading focused on key invariants + complexity (“must mention monotonic stack”, “O(n)”, “why it works”)
+
+This matches the kind of “typed recall” you want, without needing a fork.
+
+If you want, I can sketch the add-on architecture in Anki terms
+Like: where to hook into reviewer, what objects expose the typed answer, how to store per-note AI rubrics, and how to render feedback cleanly in the review UI.
+
+If you tell me what kind of cards you want graded (concept definitions vs proofs vs code snippets vs short answers), I’ll propose a minimal spec that’s shippable.
+
+
+You said:
+whats an add on vs a fork? i thought forking was just like cloning an existing repo to make your own changes in your own self-hosted version of the repo but hosted on your github profile rather than the original?
+
+ChatGPT said:
+Good question — and you’re not wrong. You’re just mixing Git mechanics with product architecture.
+
+Let’s separate the layers clearly.
+
+1️⃣ What is a fork (in the Git sense)?
+Yes — you’re correct:
+
+A fork =
+You copy someone else’s repo into your GitHub account and now:
+
+You can change the source code
+
+You can publish your own version
+
+You are no longer dependent on the original maintainers
+
+So if you fork Anki, you now own:
+
+The core Python backend
+
+The Qt UI
+
+Sync logic
+
+Scheduling algorithm
+
+Everything
+
+You’re maintaining your own Anki.
+
+2️⃣ What is an add-on?
+An add-on is a plugin.
+
+You don’t modify Anki itself.
+
+Instead:
+
+Anki exposes a plugin API
+
+You write a separate small Python package
+
+Anki loads it at runtime
+
+It hooks into specific events
+
+So:
+
+Fork = modify the engine
+Add-on = plug something into the engine
+
+3️⃣ Concrete analogy
+Think about VS Code:
+
+If you fork VS Code → you’re building your own text editor.
+
+If you build an extension → you’re adding functionality to VS Code.
+
+Most people build extensions.
+
+Very few people fork VS Code.
+
+Same with Anki.
+
+4️⃣ Why this distinction matters practically
+If you fork Anki:
+
+You must:
+
+Merge upstream changes forever
+
+Handle cross-platform builds (Windows, macOS, Linux)
+
+Maintain sync compatibility
+
+Deal with database migrations
+
+Handle mobile compatibility (AnkiDroid / iOS)
+
+That’s a serious maintenance burden.
+
+If you write an add-on:
+
+You:
+
+Write ~300–800 lines of Python
+
+Hook into reviewer events
+
+Ship it
+
+Done
+
+No maintaining the whole app.
+
+5️⃣ What would your AI grading feature require?
+You do NOT need to modify Anki’s core scheduler or DB.
+
+You just need:
+
+Access to typed answer
+
+Access to correct answer field
+
+Button to trigger grading
+
+Way to display feedback
+
+Anki already exposes these hooks.
+
+So this is squarely add-on territory, not fork territory.
+
+6️⃣ When would a fork actually make sense?
+Only if you want to:
+
+Redesign the scheduler
+
+Rewrite the review UI entirely
+
+Change the spaced repetition algorithm fundamentally
+
+Build a totally new sync backend
+
+Turn Anki into an AI-native flashcard app
+
+That’s a new product.
+
+That’s “Anki++”.
+
+That’s not just a feature.
+
+7️⃣ Here’s the deeper product insight
+You’re thinking like a systems builder:
+
+“If I want new functionality, do I need to own the base layer?”
+
+In 95% of real software ecosystems, the answer is:
+
+No. You extend.
+
+Forking is expensive cognitive debt.
+
+Extensions are leverage.
+
+8️⃣ And here’s the strategic lens (for you specifically)
+Given:
+
+You’re balancing Meta workload
+
+You’re rebuilding academic momentum
+
+You want leverage, not maintenance drag
+
+Forking Anki would be an energy trap.
+
+An add-on would be:
+
+1–2 week build
+
+Portfolio artifact
+
+Useful tool
+
+Zero long-term maintenance headache
+
+If you want, I can:
+
+Sketch exactly how Anki add-ons hook into the review pipeline
+
+Or outline a 3-evening MVP plan
+
+Or help you decide if this is worth building at all vs using an LLM chat workflow
+
+Which direction do you want to go?
+
+
+You said:
+Turn Anki into an AI-native flashcard app
+
+What other features could we add
+
+ChatGPT said:
+Now we’re talking.
+
+If you’re not just adding grading — but imagining “Anki-native AI memory system” — then this becomes much more interesting than a plugin.
+
+You’re basically asking:
+
+What would spaced repetition look like if it were designed in 2026, with LLMs from day one?
+
+Let’s explore that seriously.
+
+🔥 Core Idea: AI-Native Memory System
+Instead of:
+
+Card → Reveal → Self-grade → Scheduler
+
+You get:
+
+Concept graph → Active recall → AI probing → Adaptive scheduling → Concept mastery model
+
+That’s a fundamentally different product.
+
+1️⃣ Semantic Grading (Obvious First Layer)
+You already mentioned this:
+
+User types answer
+
+AI evaluates semantic correctness
+
+Returns:
+
+Correct / Partial / Incorrect
+
+Missing elements
+
+Confidence score
+
+But we can go much further.
+
+2️⃣ Socratic Mode (Massive Upgrade)
+Instead of grading immediately:
+
+AI asks follow-ups.
+
+Example:
+
+Card:
+“What is a monotonic stack?”
+
+User answer:
+“It’s a stack that maintains increasing order.”
+
+AI response:
+
+“Increasing by what? Index or value?”
+
+“What invariant must hold?”
+
+“When do we pop?”
+
+This forces deeper encoding.
+
+Anki today can’t do that.
+
+This would be huge for:
+
+EECS concepts
+
+LeetCode invariants
+
+Math definitions
+
+Proof structure
+
+3️⃣ Concept Graph Instead of Isolated Cards
+Current Anki: flat card list.
+
+AI-native version:
+
+Cards link to concepts
+
+Concepts link to prerequisites
+
+AI tracks:
+
+You confuse DFS and BFS
+
+You mix up eigenvalues and singular values
+
+You forget boundary conditions in DP
+
+So instead of just “Card 42 wrong,” you get:
+
+You consistently miss the invariant concept across 5 different cards.
+
+That’s powerful.
+
+4️⃣ Dynamic Card Generation
+Instead of writing 50 cards manually:
+
+You input:
+
+“EECS 370 pipeline hazards lecture transcript”
+
+AI generates:
+
+Definitions
+
+Cloze deletions
+
+Edge case probes
+
+Trick questions
+
+Proof prompts
+
+Then it continues generating new variants when you plateau.
+
+This prevents memorization by recognition.
+
+5️⃣ Proof & Derivation Mode (For You Specifically)
+For math / linear algebra:
+
+Instead of:
+
+“What is the definition of eigenvalue?”
+
+You get:
+
+“Prove that eigenvectors corresponding to distinct eigenvalues are linearly independent.”
+
+AI evaluates structure:
+
+Did you assume linear combination = 0?
+
+Did you apply operator?
+
+Did you use distinctness condition?
+
+This becomes grad-level memory reinforcement.
+
+That would be insane leverage for someone doing EECS + ML.
+
+6️⃣ LeetCode Mode (Huge for You)
+Instead of memorizing patterns:
+
+AI-native SRS tracks:
+
+Invariant recognition
+
+Complexity recall
+
+Data structure selection
+
+Mistake archetypes
+
+After 30 problems it says:
+
+You overuse hash maps when two pointers would suffice.
+You forget to check empty input edge cases.
+
+That’s skill shaping, not flashcards.
+
+7️⃣ Mastery Modeling (Not Just Ease Factor)
+Current Anki:
+
+Ease factor
+
+Interval
+
+Review history
+
+AI-native:
+
+Concept confidence vector
+
+Retrieval latency
+
+Explanation coherence score
+
+Cross-concept interference detection
+
+This is closer to cognitive science.
+
+8️⃣ Error Pattern Analysis
+Instead of “You got 63% correct”:
+
+You see:
+
+40%: missing edge case
+
+30%: vague definitions
+
+20%: incomplete proofs
+
+10%: terminology swap
+
+This becomes a feedback loop.
+
+9️⃣ Active Recall Without Cards
+Instead of fixed cards:
+
+AI periodically asks:
+
+“Explain how BFS differs from DFS in memory complexity.”
+
+Even if no card exists.
+
+That’s semantic compression testing.
+
+🔟 Interview Simulation Mode
+You’ve been grinding LeetCode.
+
+Imagine:
+
+AI acts as interviewer
+
+You explain approach verbally
+
+AI challenges assumptions
+
+AI scores clarity and correctness
+
+That’s insanely valuable.
+
+11️⃣ Retrieval-Strength Optimization
+AI tracks:
+
+Time to respond
+
+Depth of explanation
+
+Confidence mismatch
+
+Schedules reviews not just by time — but by retrieval effort curve.
+
+This aligns with actual cognitive science.
+
+12️⃣ Personal Knowledge Twin
+Over time it builds:
+
+What you know
+
+What you misunderstand
+
+What you half-know
+
+Where your blind spots cluster
+
+This becomes a cognitive dashboard.
+
+🚀 Now Here’s the Important Question
+Are you imagining:
+
+A) An Anki fork
+B) A serious standalone product
+C) A personal tool for yourself
+D) A startup
+
+Because those are very different scope commitments.
+
+Given your current Meta + school + LeetCode + life load…
+
+If this is real:
+
+The smartest move is:
+
+Prototype as an add-on
+
+Extract learnings
+
+THEN decide if a full AI-native SRS engine is worth building
+
+And I’ll say something strategic:
+
+This idea is actually aligned with your deeper pattern.
+
+You:
+
+Care about cognitive structure
+
+Care about alignment
+
+Care about internal models
+
+Care about mastery
+
+This is not just a feature idea.
+
+This is a “build a better mind interface” idea.
+
+That’s big.
+
+If you want, I can next:
+
+Architect what a v1 standalone AI-native SRS would look like (realistically)
+
+Or map the smallest version you could build in 4 weeks
+
+Or evaluate whether this is actually high ROI relative to your current life trajectory
+
+Where do you want to take it?
+
+
+You said:
+Architect what a v1 standalone AI-native SRS would look like (realistically)
+Or evaluate whether this is actually high ROI relative to your current life trajectory
+
+ChatGPT said:
+A realistic v1 AI-native SRS (standalone) architecture
+Product goal (v1)
+“Typed recall + AI grading + targeted follow-ups + better scheduling than Anki for conceptual learning.”
+
+Not “AGI tutor”, not full knowledge graph of your life. Just a review loop that’s measurably better for EECS/LeetCode/math.
+
+1) The v1 feature set that’s actually shippable
+Must-have (ship this)
+Card types
+
+Basic (Front → typed answer → AI grades)
+
+Cloze (with typed cloze)
+
+“Explain” cards (prompt expects short explanation)
+
+AI grader
+
+Structured output: verdict (correct/partial/incorrect), missing_points[], confidence, feedback_short
+
+Optional rubric per deck/card: required keywords / must-mention concepts / strictness
+
+Socratic follow-up (1–2 questions max)
+
+Only when partial/incorrect or low confidence
+
+Goal: elicit missing concept, not a whole lesson
+
+Scheduler
+
+Start simple: SM-2-ish + calibration from AI score:
+
+Correct/high confidence → normal interval growth
+
+Partial → shorter interval + add a sibling variant
+
+Incorrect → immediate relearn steps
+
+Store: interval, ease, lapses, last grade, AI score history
+
+Import/export
+
+Import Anki APKG (or CSV first, APKG later)
+
+Export to Anki-friendly format
+
+Offline-friendly
+
+If no LLM available: fall back to keyword match / exact match / “manual grade”
+
+Nice-to-have (v1.5)
+Variant generation (create a new prompt that tests same concept differently)
+
+Concept tags & lightweight dependency edges (manual, not fully auto)
+
+“Mistake archetypes” dashboard (e.g., “missed edge cases”, “vague definition”)
+
+Not in v1 (scope killers)
+Full auto-generated concept graph from everything
+
+On-device model inference
+
+Speech mode
+
+Mobile apps
+
+Real-time collaboration
+
+Custom sync protocol across devices
+
+2) System architecture (practical, boring, works)
+Client
+Web app (Next.js or React + Vite)
+
+Review UI (keyboard-first)
+
+Deck manager
+
+Card editor
+
+Rubric editor (simple)
+
+Optional later: Electron/Tauri desktop wrapper for offline storage + hotkeys
+
+Backend
+FastAPI (or Node if you prefer full-stack JS) with:
+
+Auth (email magic link or OAuth)
+
+Card/deck CRUD
+
+Review session endpoints
+
+AI grading endpoint (server calls model so you can swap providers + secure keys)
+
+Scheduler service
+
+Storage
+Postgres (supabase or managed) + optionally Redis for caching
+
+Tables you actually need:
+
+users
+decks
+cards: id, deck_id, type, prompt_fields(json), answer_fields(json), rubric(json), tags[]
+reviews: card_id, user_id, ts, user_answer, ai_verdict, ai_score, ai_missing(json), user_override, latency_ms
+card_state: card_id, user_id, interval_days, ease, due_ts, lapses, last_verdict, streak
+llm_cache: hash(prompt+answer+rubric) → structured grade
+
+AI layer
+“Provider adapter” interface:
+
+OpenAI / Anthropic / local / whatever
+
+Prompting strategy:
+
+System: strict rubric-following grader, no tutoring unless asked
+
+User: prompt + canonical answer + user answer + rubric + “allowed variants”
+
+Output: JSON schema enforced
+
+Key design choice
+AI grades, but user can override easily.
+If users don’t trust the grader, product dies. Your UI must make override frictionless and use overrides to improve future grading (cache/rubric).
+
+3) Review loop UX (what it feels like)
+Show prompt
+
+User types answer
+
+Hit Enter → instant local validation (if possible) + async AI grade (spinner)
+
+Show:
+
+Verdict
+
+“Missing:” bullets (max 3)
+
+One follow-up question if needed
+
+Buttons/hotkeys:
+
+1 Again / 2 Hard / 3 Good / 4 Easy
+
+O Override (Correct/Partial/Incorrect)
+
+R Edit rubric (quick add “must mention X”)
+
+4) MVP build plan (most realistic path)
+Week 1
+
+Data model + deck/card CRUD
+
+Review UI with typed input + manual grading
+
+SM-2 scheduling
+
+Week 2
+
+AI grading endpoint + structured output
+
+Cache + rate limit + per-deck AI enable
+
+Override UI
+
+Week 3
+
+Socratic follow-up (1 question)
+
+Basic analytics (“most missed tags”, “most-lapsed cards”)
+
+Import CSV (Anki later)
+
+Week 4
+
+APKG import (optional; can slip)
+
+Rubric editor polish
+
+Deploy + dogfood on your EECS decks
+
+That’s “realistically shippable” as a solo builder without it eating your life.
+
+ROI relative to your current life trajectory (Meta + finishing BS + LeetCode)
+The upside
+Direct payoff: makes EECS/LeetCode studying more effective immediately
+
+Portfolio signal: “built an AI-native learning system” is strong and coherent with your interests
+
+Optionality: could become a small SaaS or open-source project with users
+
+The risks (the real ones)
+Time sink disguised as leverage. This can become a beautiful procrastination engine.
+
+Maintenance gravity: auth, hosting, bugs, user support, model costs.
+
+Opportunity cost: every week here is a week not spent stabilizing at Meta / finishing 281/370 / LC reps.
+
+My straight recommendation for you (given where you are right now)
+If your top priorities are:
+
+survive + perform on the Meta contract
+
+finish BS momentum
+
+keep LeetCode compounding
+
+Then a standalone app is not the highest ROI right now.
+
+What is high ROI:
+
+Build the smallest thing that improves your studying with minimal surface area.
+
+So:
+
+2–3 day prototype (either an Anki add-on or a tiny standalone “review mode only” web app)
+
+Use it daily for 2 weeks
+
+Only then decide whether to expand
+
+A “good ROI” version of this project
+Scope: review UI + AI grading + scheduling + import/export
+
+No accounts (local-first), no sync, no mobile
+
+Run on your laptop, store in SQLite
+
+Optional: you can open-source it without running a service
+
+This gives you 80% of the benefit with 20% of the risk.
+
+When it becomes high ROI to go bigger
+If, after 2–4 weeks of dogfooding:
+
+You’re clearly learning faster,
+
+You keep using it daily,
+
+And you can build without destabilizing Meta/school,
+
+…then you can justify turning it into a proper product.
+
+If you want a crisp decision rule
+If you can’t commit 3–5 hours/week max without it derailing Meta/school: do add-on or local-only mini app
+
+If you can commit 8–12 hours/week for 4 weeks and you’ll actually use it daily: build the standalone v1
+
+If you tell me your preferred stack (Python/FastAPI vs full-stack TS) and whether you want local-first or hosted, I’ll give you a concrete repo scaffold + M0–M4 task cards you can paste into Cursor.
+
+
+You said:
+how do we an add on of just llm grading
+
+ChatGPT said:
+
+Thought for 31s
+You can do “LLM grading only” as an Anki add-on by:
+
+injecting a little JavaScript into the reviewer webview to read the typed answer box, and
+
+sending it back to Python via pycmd(...), then
+
+calling your LLM, and
+
+showing the result back in the reviewer UI.
+
+Anki explicitly supports this pattern: you can modify reviewer HTML/JS with gui_hooks.webview_will_set_content() and intercept JS messages with gui_hooks.webview_did_receive_js_message(), using the pycmd(string) bridge. 
+
+Below is a realistic “minimal” blueprint.
+
+Minimal add-on design
+What you’ll build
+A hotkey or button: “Grade with AI”
+
+Works on cards that use {{type:...}} (typed answer cards)
+
+When clicked:
+
+JS grabs the typed input text
+
+sends pycmd("llmgrade:...")
+
+Python receives it, calls LLM, returns verdict + missing points
+
+JS renders a small panel in the reviewer
+
+Add-on skeleton (files)
+Create a new add-on folder (Tools → Add-ons → View Files → create folder anki_llm_grader/):
+
+anki_llm_grader/
+  __init__.py
+  web/
+    grader.js
+    grader.css
+Then register web exports so Anki can serve your JS/CSS from /_addons/... (Anki supports this). 
+
+Core hook points you’ll use
+1) Inject JS/CSS into the reviewer webview
+Use gui_hooks.webview_will_set_content() to append your assets. 
+
+2) Receive messages from JS in Python
+Use gui_hooks.webview_did_receive_js_message() to intercept pycmd(...) messages. 
+
+Minimal code (conceptual but close-to-real)
+__init__.py (Python side)
+from __future__ import annotations
+
+import json
+import urllib.parse
+from dataclasses import dataclass
+from typing import Optional
+
+import requests
+from aqt import mw, gui_hooks
+from aqt.webview import WebContent
+
+ADDON_CMD_PREFIX = "llmgrade:"
+
+
+def _addon_package() -> str:
+    return mw.addonManager.addonFromModule(__name__)
+
+
+def on_webview_will_set_content(web_content: WebContent, context) -> None:
+    # Only inject into reviewer
+    # context varies by screen; reviewer typically has a "reviewer" attr or name
+    if not getattr(context, "reviewer", None):
+        return
+
+    pkg = _addon_package()
+    web_content.js.append(f"/_addons/{pkg}/web/grader.js")
+    web_content.css.append(f"/_addons/{pkg}/web/grader.css")
+
+
+def on_js_message(handled: bool, message: str, context) -> tuple[bool, Optional[str]]:
+    # Let other handlers run if not ours
+    if not isinstance(message, str) or not message.startswith(ADDON_CMD_PREFIX):
+        return handled, None
+
+    # Only handle in reviewer context
+    reviewer = getattr(context, "reviewer", None)
+    if reviewer is None:
+        return True, None
+
+    payload_enc = message[len(ADDON_CMD_PREFIX):]
+    payload_json = urllib.parse.unquote(payload_enc)
+    payload = json.loads(payload_json)
+
+    user_answer = payload.get("userAnswer", "")
+    correct_answer = payload.get("correctAnswer", "")
+    prompt_text = payload.get("prompt", "")
+
+    result = grade_with_llm(prompt_text, correct_answer, user_answer)
+
+    # Send result back into webview (call a JS function we define)
+    reviewer.web.eval(f"window.__llmGradeShowResult({json.dumps(result)});")
+
+    return True, None
+
+
+def grade_with_llm(prompt: str, correct: str, user: str) -> dict:
+    """
+    Replace this with your provider.
+    Keep it deterministic: low temp, JSON output.
+    """
+    # Example: call a local server you run (recommended),
+    # so you don't store API keys in the addon.
+    resp = requests.post(
+        "http://127.0.0.1:8787/grade",
+        json={"prompt": prompt, "correct": correct, "user": user},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def init():
+    # Expose web assets
+    mw.addonManager.setWebExports(__name__, r"web/.*(css|js)")
+
+    gui_hooks.webview_will_set_content.append(on_webview_will_set_content)
+    gui_hooks.webview_did_receive_js_message.append(on_js_message)
+
+
+init()
+Why this is the “right shape”:
+
+It uses the supported webview injection + JS message bridge. 
+
+It avoids fighting Anki internals to “find” typed answer state in Python; you just read it from DOM where it exists.
+
+web/grader.js (JS side)
+(function () {
+  function getTypeAnswerInput() {
+    // The typed answer box is usually an <input> or <textarea>.
+    // You may need to inspect the DOM in Anki's reviewer to confirm selectors.
+    return document.querySelector("input[type='text'], textarea");
+  }
+
+  function getPromptText() {
+    // You can grab the visible question text from the DOM.
+    // Often #qa contains the card HTML.
+    const qa = document.querySelector("#qa");
+    return qa ? qa.innerText.trim() : "";
+  }
+
+  function getCorrectAnswerText() {
+    // If you're on the answer side, the correct answer is visible.
+    // Minimal approach: just capture all text; better is to use a dedicated field marker.
+    const qa = document.querySelector("#qa");
+    return qa ? qa.innerText.trim() : "";
+  }
+
+  function ensurePanel() {
+    let el = document.querySelector("#llm-grade-panel");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "llm-grade-panel";
+      el.innerHTML = `
+        <div class="llm-grade-header">
+          <button id="llm-grade-btn">Grade with AI</button>
+          <span id="llm-grade-status"></span>
+        </div>
+        <div id="llm-grade-output"></div>
+      `;
+      document.body.appendChild(el);
+
+      document.querySelector("#llm-grade-btn").addEventListener("click", () => {
+        const inp = getTypeAnswerInput();
+        const userAnswer = inp ? inp.value : "";
+        const payload = {
+          userAnswer,
+          prompt: getPromptText(),
+          correctAnswer: getCorrectAnswerText(),
+        };
+        const enc = encodeURIComponent(JSON.stringify(payload));
+        document.querySelector("#llm-grade-status").textContent = "Grading…";
+        // pycmd() is provided by Anki in reviewer webviews. :contentReference[oaicite:5]{index=5}
+        pycmd("llmgrade:" + enc);
+      });
+    }
+    return el;
+  }
+
+  window.__llmGradeShowResult = function (result) {
+    ensurePanel();
+    document.querySelector("#llm-grade-status").textContent = "";
+    const out = document.querySelector("#llm-grade-output");
+    const missing = (result.missing_points || []).map(x => `<li>${escapeHtml(x)}</li>`).join("");
+    out.innerHTML = `
+      <div><b>${escapeHtml(result.verdict || "unknown")}</b> (score: ${result.score ?? "?"})</div>
+      ${result.feedback_short ? `<div>${escapeHtml(result.feedback_short)}</div>` : ""}
+      ${missing ? `<div>Missing:</div><ul>${missing}</ul>` : ""}
+    `;
+  };
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+    }[c]));
+  }
+
+  // Anki re-renders content; re-create UI often.
+  // Cheap approach: try every time DOM changes.
+  const obs = new MutationObserver(() => ensurePanel());
+  obs.observe(document.documentElement, { childList: true, subtree: true });
+
+  ensurePanel();
+})();
+web/grader.css
+#llm-grade-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 320px;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid rgba(128,128,128,0.4);
+  border-radius: 10px;
+  background: rgba(20,20,20,0.85);
+  color: white;
+  z-index: 9999;
+  font-size: 12px;
+}
+#llm-grade-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.llm-grade-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+How to make grading actually good (minimal rubric)
+Your grading server (the POST /grade endpoint) should return a strict JSON like:
+
+{
+  "verdict": "correct|partial|incorrect",
+  "score": 0.0,
+  "missing_points": ["..."],
+  "feedback_short": "..."
+}
+Keep temperature low. Make the model check required points.
+
+The one tricky bit: finding the “correct answer”
+For typed-answer cards, Anki’s “correct answer” is typically a specific field, not the entire back side.
+
+Two robust options:
+
+Add a dedicated field like AnswerKey and include it invisibly in the template inside a hidden span with an id, then your JS reads that exact element.
+
+Use a template marker like:
+
+<span id="llm_answer_key" style="display:none">{{AnswerKey}}</span>
+Then document.querySelector("#llm_answer_key").innerText.
+
+This avoids accidentally sending the whole back side or extra explanation text.
+
+Best next step (fastest path)
+If you tell me:
+
+which provider you want (OpenAI / Anthropic / local Ollama / etc.)
+
+and whether your cards have a clean “Answer” field we can target
+
+…I’ll give you a working minimal /grade server (FastAPI) + a safer prompt + a cleaner DOM selector strategy.
+
+(And if you’re using this for EECS/LeetCode, I’ll bake in a rubric mode that checks for invariants / complexity / key steps, not just “sounds right.”)
+
+
+You said:
+i dont understand doesnt that still require forking anki to edit its source code
+
+ChatGPT said:
+No — and this is the key conceptual shift.
+
+You are not editing Anki’s source code on disk.
+
+You are:
+
+Writing separate Python files
+
+Dropping them in Anki’s add-ons folder
+
+Anki loads them at runtime
+
+Your code hooks into events
+
+Anki is designed to allow this.
+
+Think of it like this
+When Anki starts:
+
+1. Load core Anki code
+2. Load installed add-ons
+3. Run add-on initialization hooks
+Your add-on says:
+
+“When the reviewer webview loads, also inject my JS.”
+“When JS sends a message, call my Python function.”
+
+You are extending behavior — not modifying core files.
+
+Forking would mean this
+You would:
+
+Clone Anki’s GitHub repo
+
+Edit core reviewer.py
+
+Edit web templates
+
+Rebuild Anki
+
+Install your custom version
+
+Maintain merges forever
+
+That’s heavy.
+
+Add-on means this
+Anki exposes hook points like:
+
+gui_hooks.webview_will_set_content.append(...)
+This is like Anki saying:
+
+“Hey, if any plugin wants to modify the reviewer HTML before display, here’s your chance.”
+
+You attach a function to that hook.
+
+You are not editing the file that defines the reviewer.
+
+You’re registering a callback.
+
+Concrete analogy
+Imagine a game engine.
+
+Fork = modifying the engine source.
+
+Add-on = writing a mod using the engine’s plugin API.
+
+You’re writing a mod.
+
+What actually happens internally
+Anki’s reviewer creates a webview and sets its HTML.
+
+Before it does, it runs:
+
+for hook in gui_hooks.webview_will_set_content:
+    hook(web_content, context)
+Your function is in that list.
+
+You append your JS/CSS to web_content.
+
+That’s it.
+
+No source modification.
+
+No fork.
+
+Why this is safe
+If your add-on is removed → Anki behaves normally.
+
+If Anki updates → your hook still runs (unless they break API).
+
+You’re not touching scheduler, DB, sync, etc.
+
+The only time you need a fork
+If you want to:
+
+Change how cards are scheduled internally
+
+Rewrite the reviewer architecture
+
+Modify database schema
+
+Change core sync logic
+
+Your grading overlay does not require that.
+
+The confusion comes from this
+When you see:
+
+gui_hooks.webview_will_set_content.append(...)
+It feels like you're editing Anki.
+
+But you're not.
+
+You’re just registering a function with a public API.
+
+Same way:
+
+VS Code extensions
+
+Chrome extensions
+
+Figma plugins
+
+Blender add-ons
+
+Obsidian plugins
+
+All work.
+
+In short
+You do not fork Anki.
+
+You:
+
+Write a Python file.
+
+Put it in the add-ons folder.
+
+Restart Anki.
+
+Your feature exists.
+
+Zero modification of Anki’s repository.
+
+If you want, I can now:
+
+Draw a simple diagram of the runtime flow (JS ↔ Python ↔ LLM)
+
+Or walk you through exactly how to install and test a “hello world” add-on in 5 minutes
+
+Or simplify the grading architecture even more so it’s minimal mental load
+
+Where do you want to go next?
+
+
+You said:
+ok give build brief and cursor task list to accomplish this. also where would groq api keys be stored for this llm feature
+
+ChatGPT said:
+Build brief: Anki add-on for “LLM grade my typed answer” (Groq)
+One-liner
+An Anki add-on that adds a “Grade with AI” button + hotkey on review cards with {{type:...}}, sends (prompt + canonical answer + user typed answer + optional rubric) to Groq, and renders a Correct / Partial / Incorrect verdict with “missing points” bullets.
+
+What it will (and won’t) do
+Will
+
+Work on typed-answer cards ({{type:Field}})
+
+Add a button + hotkey (e.g., Ctrl+Enter) to trigger grading
+
+Read:
+
+user typed response (from DOM)
+
+prompt text + answer key (from hidden fields in template)
+
+optional rubric field (strictness / required concepts)
+
+Call Groq LLM
+
+Display structured result in a small panel
+
+Allow user override (Correct/Partial/Incorrect) (optional but recommended)
+
+Won’t (v1)
+
+Auto-grade every card automatically (avoid cost/latency)
+
+Change Anki scheduler / intervals
+
+Sync grading data
+
+Mobile (AnkiDroid/iOS) support
+
+Template requirement (minimal, robust)
+You add hidden spans to your card templates so the add-on can reliably grab the right text.
+
+Example (Front template):
+
+<div id="llm_prompt" style="display:none">{{Front}}</div>
+<div id="llm_answer_key" style="display:none">{{Back}}</div>
+<div id="llm_rubric" style="display:none">{{Rubric}}</div>
+
+{{Front}}
+{{type:TypedAnswer}}
+Back template can stay normal. (Or also include hidden spans; front is usually enough.)
+
+If you don’t have a Rubric field, omit it.
+
+Data contract to Groq (structured JSON)
+Request (conceptual):
+
+{
+  "prompt": "...",
+  "answer_key": "...",
+  "user_answer": "...",
+  "rubric": "..."
+}
+Response:
+
+{
+  "verdict": "correct|partial|incorrect",
+  "score": 0.0,
+  "missing_points": ["..."],
+  "feedback_short": "..."
+}
+Cursor task list (granular, implementable)
+M0 — Repo + add-on skeleton
+Create add-on folder: anki_llm_grader/
+
+Add files:
+
+__init__.py
+
+manifest.json (Anki add-on metadata)
+
+web/grader.js
+
+web/grader.css
+
+Add a minimal “hello panel” injected into reviewer to confirm loading:
+
+Use gui_hooks.webview_will_set_content
+
+Use setWebExports for web/.*
+
+Acceptance: restart Anki → reviewer shows a floating panel saying “LLM Grader loaded”.
+
+M1 — Read typed answer + hidden fields (no LLM yet)
+In grader.js, implement selectors:
+
+typed answer input (find input/textarea used by {{type:}})
+
+#llm_prompt, #llm_answer_key, #llm_rubric
+
+Add “Grade with AI” button that just prints captured values to panel (no network).
+
+Add hotkey Ctrl+Enter to trigger same action.
+
+Acceptance: click button → panel shows the extracted prompt/answer/user answer.
+
+M2 — JS → Python bridge
+In JS: on grade click, send payload via pycmd("llmgrade:" + encodeURIComponent(JSON.stringify(payload)))
+
+In Python: add gui_hooks.webview_did_receive_js_message handler:
+
+detect llmgrade:
+
+parse JSON
+
+(for now) return a mocked result
+
+In Python: call back into JS with reviewer.web.eval("window.__llmGradeShowResult(...)")
+
+In JS: implement window.__llmGradeShowResult to render verdict nicely.
+
+Acceptance: click button → Python receives payload → UI shows mocked “correct/partial/incorrect”.
+
+M3 — Groq API call (real grading)
+Add Groq client call in Python:
+
+Use HTTP request to Groq Chat Completions endpoint
+
+Force JSON output with a schema-like instruction
+
+Low temperature
+
+Add retry + timeout (e.g., 15–20s)
+
+Add simple rate limit: don’t allow more than 1 request every X seconds.
+
+Add local cache (in-memory dict first) keyed by hash(prompt+answer_key+user_answer+rubric).
+
+Acceptance: real Groq response appears; repeated grading of same input hits cache.
+
+M4 — Settings (API key + model + strictness)
+Create add-on config defaults:
+
+groq_api_key (string)
+
+model (e.g., "llama-3.1-70b-versatile" or similar)
+
+strictness (0–2)
+
+enabled_decks or only_if_tagged (optional)
+
+Add a simple config UI:
+
+easiest: rely on Anki’s built-in Add-on Config editor (JSON) (fastest)
+
+Read config at runtime; if no key, show “Missing API key” in panel.
+
+Acceptance: user can paste key into add-on config; grading works without code edits.
+
+M5 — Quality + safety polish
+Implement “override” buttons in panel: Correct/Partial/Incorrect (doesn’t change scheduling; just helps trust)
+
+Redaction option: strip HTML, limit chars (avoid sending huge content)
+
+Error handling:
+
+network down
+
+invalid key
+
+non-JSON model output → show raw + ask to retry
+
+Add “Only grade when I click” (default) + optional “auto-grade on show answer” (off by default)
+
+Acceptance: robust UX; failures are understandable; no crashes.
+
+Where do Groq API keys live?
+Best options (in order)
+Option A (recommended): Store in Anki add-on config (local only)
+Anki add-ons have a config stored locally on your machine (in Anki’s profile/addons data).
+
+Pros: simple, no extra infra.
+
+Cons: key is stored in plaintext on your machine (like most local apps).
+
+This is the normal approach for personal tooling.
+
+Option B: Environment variable (more “dev-y”)
+Your add-on reads GROQ_API_KEY from environment.
+
+Pros: not stored in Anki files.
+
+Cons: annoying for most users; requires setting env vars correctly.
+
+Good if you’re the only user and you’re comfortable with env management.
+
+Option C: Local “grading proxy” server
+The add-on calls http://localhost:8787/grade
+
+The proxy holds the key (env var), not the add-on
+
+Pros: easiest way to avoid putting keys into Anki config; can add better caching/logging
+
+Cons: you must run a local server alongside Anki.
+
+This is great if you want cleaner separation + security hygiene.
+
+My recommendation for you
+Start with Option A (Anki add-on config). It’s fastest and totally fine for personal use.
+
+If you later share the add-on publicly, switch to:
+
+“Bring your own key” via config, or
+
+Local proxy server for power users, or
+
+A hosted backend (then you’re basically building a product)
+
+If you want, I can also give you:
+
+A Groq grading prompt that reliably returns JSON (and doesn’t hallucinate “correct”)
+
+The exact Anki add-on config plumbing code (read/write defaults) for v2.1+
+
+
+You said:
+do i build that in separate repo? how do i hook it up to anki?
+
+ChatGPT said:
+Yes — build it as a separate little repo (or just a folder), because an Anki add-on is essentially a standalone codebase. Then “hooking it up” is just copying/symlinking that folder into Anki’s add-ons directory and restarting Anki.
+
+Here’s the practical workflow that won’t make you fight your tools.
+
+1) Repo layout (recommended)
+Create a repo like:
+
+anki-llm-grader/
+  addon/
+    anki_llm_grader/
+      __init__.py
+      manifest.json
+      web/
+        grader.js
+        grader.css
+  README.md
+Why: you can keep notes, versioning, issues, etc., and the folder you install is simply anki_llm_grader/.
+
+2) Where Anki loads add-ons from
+On desktop, Anki loads add-ons from your profile directory, something like:
+
+macOS: ~/Library/Application Support/Anki2/<Profile>/addons21/
+
+Windows: %APPDATA%\Anki2\<Profile>\addons21\
+
+Linux: ~/.local/share/Anki2/<Profile>/addons21/
+
+Inside addons21/, each add-on is a folder.
+
+3) Easiest “hook it up” method (no guessing paths)
+Open Anki
+
+Tools → Add-ons
+
+Click View Files (or “Open Add-ons Folder”)
+
+It opens addons21/
+
+Drop your folder in there:
+
+copy anki_llm_grader/ into addons21/
+
+Restart Anki
+
+That’s it. If your add-on’s __init__.py runs and registers hooks, it’s live.
+
+4) Best dev workflow: symlink instead of copying
+So you can edit in your repo and Anki sees changes immediately.
+
+macOS/Linux (symlink)
+From the Anki addons21/ folder:
+
+ln -s /absolute/path/to/anki-llm-grader/addon/anki_llm_grader anki_llm_grader
+Now you edit in your repo, restart Anki, changes apply.
+
+Windows (link)
+Use a directory junction (run in cmd as normal user usually works):
+
+mklink /J anki_llm_grader C:\absolute\path\to\anki-llm-grader\addon\anki_llm_grader
+5) How Anki “hooks it up” at runtime
+When Anki starts, it:
+
+scans addons21/
+
+imports each add-on package
+
+executes __init__.py
+
+So the “hook” is just: your __init__.py registers callbacks.
+
+Example conceptual hook registration:
+
+“When the reviewer webview loads, inject my JS/CSS”
+
+“When my JS calls pycmd(...), handle it”
+
+That’s why restarting Anki is the usual “apply changes” step.
+
+6) The minimal “is my add-on loaded?” test
+In __init__.py add:
+
+from aqt import mw
+from aqt.utils import showInfo
+
+showInfo("anki_llm_grader loaded!")
+Restart Anki → you should see a popup.
+(Then remove it once you’re confident it loads.)
+
+7) Where to put your Groq key (practical)
+Use Anki’s add-on config:
+
+Tools → Add-ons → select your add-on → Config
+
+Paste key into JSON
+
+Your code reads it via Anki’s add-on manager config APIs.
+
+This keeps it local to your machine.
+
+8) Debugging / iteration tips (so you don’t suffer)
+Use Anki’s debug console: Tools → Developer Tools → Console (varies by version)
+
+Print logs from Python to Anki console / stdout
+
+In JS, use console.log(...) and open the webview inspector (Anki has devtools options depending on version)
+
+If you tell me your OS (macOS/Windows/Linux) and Anki version (2.1.x), I’ll give you the exact symlink command + the exact folder path pattern for your setup.
+
+
+
+
+

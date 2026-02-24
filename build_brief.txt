@@ -1,0 +1,224 @@
+## Build brief: Anki add-on for “LLM grade my typed answer” (Groq)
+
+### One-liner
+
+An Anki add-on that adds a **“Grade with AI”** button + hotkey on review cards with `{{type:...}}`, sends **(prompt + canonical answer + user typed answer + optional rubric)** to Groq, and renders a **Correct / Partial / Incorrect** verdict with “missing points” bullets.
+
+### What it will (and won’t) do
+
+**Will**
+
+* Work on typed-answer cards (`{{type:Field}}`)
+* Add a button + hotkey (e.g., `Ctrl+Enter`) to trigger grading
+* Read:
+
+  * user typed response (from DOM)
+  * prompt text + answer key (from hidden fields in template)
+  * optional rubric field (strictness / required concepts)
+* Call Groq LLM
+* Display structured result in a small panel
+* Allow user override (Correct/Partial/Incorrect) (optional but recommended)
+
+**Won’t (v1)**
+
+* Auto-grade every card automatically (avoid cost/latency)
+* Change Anki scheduler / intervals
+* Sync grading data
+* Mobile (AnkiDroid/iOS) support
+
+---
+
+## Template requirement (minimal, robust)
+
+You add **hidden spans** to your card templates so the add-on can reliably grab the right text.
+
+Example (Front template):
+
+```html
+<div id="llm_prompt" style="display:none">{{Front}}</div>
+<div id="llm_answer_key" style="display:none">{{Back}}</div>
+<div id="llm_rubric" style="display:none">{{Rubric}}</div>
+
+{{Front}}
+{{type:TypedAnswer}}
+```
+
+Back template can stay normal. (Or also include hidden spans; front is usually enough.)
+
+If you don’t have a `Rubric` field, omit it.
+
+---
+
+## Data contract to Groq (structured JSON)
+
+Request (conceptual):
+
+```json
+{
+  "prompt": "...",
+  "answer_key": "...",
+  "user_answer": "...",
+  "rubric": "..."
+}
+```
+
+Response:
+
+```json
+{
+  "verdict": "correct|partial|incorrect",
+  "score": 0.0,
+  "missing_points": ["..."],
+  "feedback_short": "..."
+}
+```
+
+---
+
+# Cursor task list (granular, implementable)
+
+### M0 — Repo + add-on skeleton
+
+1. Create add-on folder: `anki_llm_grader/`
+2. Add files:
+
+   * `__init__.py`
+   * `manifest.json` (Anki add-on metadata)
+   * `web/grader.js`
+   * `web/grader.css`
+3. Add a minimal “hello panel” injected into reviewer to confirm loading:
+
+   * Use `gui_hooks.webview_will_set_content`
+   * Use `setWebExports` for `web/.*`
+
+**Acceptance:** restart Anki → reviewer shows a floating panel saying “LLM Grader loaded”.
+
+---
+
+### M1 — Read typed answer + hidden fields (no LLM yet)
+
+4. In `grader.js`, implement selectors:
+
+   * typed answer input (find `input`/`textarea` used by `{{type:}}`)
+   * `#llm_prompt`, `#llm_answer_key`, `#llm_rubric`
+5. Add “Grade with AI” button that just prints captured values to panel (no network).
+6. Add hotkey `Ctrl+Enter` to trigger same action.
+
+**Acceptance:** click button → panel shows the extracted prompt/answer/user answer.
+
+---
+
+### M2 — JS → Python bridge
+
+7. In JS: on grade click, send payload via `pycmd("llmgrade:" + encodeURIComponent(JSON.stringify(payload)))`
+8. In Python: add `gui_hooks.webview_did_receive_js_message` handler:
+
+   * detect `llmgrade:`
+   * parse JSON
+   * (for now) return a mocked result
+9. In Python: call back into JS with `reviewer.web.eval("window.__llmGradeShowResult(...)")`
+10. In JS: implement `window.__llmGradeShowResult` to render verdict nicely.
+
+**Acceptance:** click button → Python receives payload → UI shows mocked “correct/partial/incorrect”.
+
+---
+
+### M3 — Groq API call (real grading)
+
+11. Add Groq client call in Python:
+
+* Use HTTP request to Groq Chat Completions endpoint
+* Force JSON output with a schema-like instruction
+* Low temperature
+
+12. Add retry + timeout (e.g., 15–20s)
+13. Add simple rate limit: don’t allow more than 1 request every X seconds.
+14. Add local cache (in-memory dict first) keyed by `hash(prompt+answer_key+user_answer+rubric)`.
+
+**Acceptance:** real Groq response appears; repeated grading of same input hits cache.
+
+---
+
+### M4 — Settings (API key + model + strictness)
+
+15. Create add-on config defaults:
+
+* `groq_api_key` (string)
+* `model` (e.g., `"llama-3.1-70b-versatile"` or similar)
+* `strictness` (0–2)
+* `enabled_decks` or `only_if_tagged` (optional)
+
+16. Add a simple config UI:
+
+* easiest: rely on Anki’s built-in Add-on Config editor (JSON) (fastest)
+
+17. Read config at runtime; if no key, show “Missing API key” in panel.
+
+**Acceptance:** user can paste key into add-on config; grading works without code edits.
+
+---
+
+### M5 — Quality + safety polish
+
+18. Implement “override” buttons in panel: Correct/Partial/Incorrect (doesn’t change scheduling; just helps trust)
+19. Redaction option: strip HTML, limit chars (avoid sending huge content)
+20. Error handling:
+
+* network down
+* invalid key
+* non-JSON model output → show raw + ask to retry
+
+21. Add “Only grade when I click” (default) + optional “auto-grade on show answer” (off by default)
+
+**Acceptance:** robust UX; failures are understandable; no crashes.
+
+---
+
+## Where do Groq API keys live?
+
+### Best options (in order)
+
+#### Option A (recommended): Store in Anki add-on config (local only)
+
+* Anki add-ons have a **config** stored locally on your machine (in Anki’s profile/addons data).
+* Pros: simple, no extra infra.
+* Cons: key is stored in plaintext on your machine (like most local apps).
+
+This is the normal approach for personal tooling.
+
+#### Option B: Environment variable (more “dev-y”)
+
+* Your add-on reads `GROQ_API_KEY` from environment.
+* Pros: not stored in Anki files.
+* Cons: annoying for most users; requires setting env vars correctly.
+
+Good if you’re the only user and you’re comfortable with env management.
+
+#### Option C: Local “grading proxy” server
+
+* The add-on calls `http://localhost:8787/grade`
+* The proxy holds the key (env var), not the add-on
+* Pros: easiest way to avoid putting keys into Anki config; can add better caching/logging
+* Cons: you must run a local server alongside Anki.
+
+This is great if you want cleaner separation + security hygiene.
+
+---
+
+## My recommendation for you
+
+Start with **Option A** (Anki add-on config). It’s fastest and totally fine for personal use.
+
+If you later share the add-on publicly, switch to:
+
+* “Bring your own key” via config, or
+* Local proxy server for power users, or
+* A hosted backend (then you’re basically building a product)
+
+---
+
+If you want, I can also give you:
+
+* A **Groq grading prompt** that reliably returns JSON (and doesn’t hallucinate “correct”)
+* The exact Anki add-on config plumbing code (read/write defaults) for v2.1+
+
