@@ -1,8 +1,8 @@
 # Anki LLM Grader
 
-An Anki add-on that will grade typed answers with an LLM. The current M2
-milestone captures card content and sends it through Anki's JavaScript-to-Python
-bridge, then renders a structured mock result in the reviewer.
+An Anki add-on that grades typed answers with Groq. The current M3 milestone
+performs real grading on a background thread, validates structured results,
+retries transient failures, throttles requests, and caches exact repeats.
 
 ## M0 installation
 
@@ -25,6 +25,10 @@ Add these hidden elements to the front template of a typed-answer card:
 {{type:TypedAnswer}}
 ```
 
-Omit `llm_rubric` if the note type has no rubric field. Click **Grade with
-AI** or press **Ctrl+Enter** to request a grade. M2 returns a mock result to
-exercise the complete UI bridge; the Groq API integration arrives in M3.
+Omit `llm_rubric` if the note type has no rubric field.
+
+## Groq API key
+
+Set the `GROQ_API_KEY` environment variable before launching Anki, then click
+**Grade with AI** or press **Ctrl+Enter**. M4 will add Anki-native configuration
+so an environment variable is no longer required.

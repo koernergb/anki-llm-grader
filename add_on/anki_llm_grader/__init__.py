@@ -1,6 +1,7 @@
 """Anki LLM Grader add-on entry point."""
 
 import json
+import os
 from typing import Any
 from urllib.parse import unquote
 
@@ -8,8 +9,14 @@ from aqt import gui_hooks, mw
 from aqt.reviewer import Reviewer
 from aqt.webview import WebContent
 
+from .grader import DEFAULT_MODEL, GraderError, GroqGrader
+
 
 ADDON_PACKAGE = mw.addonManager.addonFromModule(__name__)
+GRADER = GroqGrader(
+    api_key=os.environ.get("GROQ_API_KEY", ""),
+    model=DEFAULT_MODEL,
+)
 
 # Make the bundled reviewer assets available below /_addons/<package>/web/.
 mw.addonManager.setWebExports(__name__, r"web/.*\.(css|js)")
@@ -28,25 +35,10 @@ def _add_reviewer_assets(web_content: WebContent, context: object) -> None:
     )
 
 
-def _mock_result(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return a deterministic bridge-test result until M3 adds Groq."""
-    has_answer = bool(str(payload.get("user_answer", "")).strip())
-    return {
-        "verdict": "partial" if has_answer else "incorrect",
-        "score": 0.5 if has_answer else 0.0,
-        "missing_points": ["M2 uses a mock result; model grading arrives in M3."],
-        "feedback_short": (
-            "The JavaScript-to-Python bridge is working."
-            if has_answer
-            else "Enter an answer before requesting a grade."
-        ),
-    }
-
-
 def _handle_js_message(
     handled: tuple[bool, Any], message: str, context: object
 ) -> tuple[bool, Any]:
-    """Receive grader requests and send the mock response to the reviewer."""
+    """Receive grader requests and run Groq outside Anki's UI thread."""
     prefix = "llmgrade:"
     if not message.startswith(prefix) or not isinstance(context, Reviewer):
         return handled
@@ -55,15 +47,29 @@ def _handle_js_message(
         payload = json.loads(unquote(message[len(prefix) :]))
         if not isinstance(payload, dict):
             raise ValueError("grading payload must be an object")
-        result = _mock_result(payload)
     except (json.JSONDecodeError, TypeError, ValueError) as error:
-        result = {
-            "error": f"Could not read grading request: {error}",
-        }
+        context.web.eval(
+            "window.__llmGradeShowResult("
+            + json.dumps({"error": f"Could not read grading request: {error}"})
+            + ");"
+        )
+        return (True, None)
 
-    context.web.eval(
-        f"window.__llmGradeShowResult({json.dumps(result)});"
-    )
+    def grade_in_background() -> dict[str, Any]:
+        try:
+            return GRADER.grade(payload)
+        except GraderError as error:
+            return {"error": str(error)}
+        except Exception:
+            return {"error": "Unexpected grading error. Check Anki's console for details."}
+
+    def show_result(future: Any) -> None:
+        result = future.result()
+        context.web.eval(
+            f"window.__llmGradeShowResult({json.dumps(result)});"
+        )
+
+    mw.taskman.run_in_background(grade_in_background, show_result)
     return (True, None)
 
 
