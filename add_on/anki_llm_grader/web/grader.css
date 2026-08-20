@@ -27,16 +27,32 @@
   color: #ddd;
 }
 
-.llm-grader-capture-row {
-  display: grid;
-  grid-template-columns: 88px 1fr;
-  gap: 8px;
-  margin: 5px 0;
+.llm-grader-verdict {
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 750;
 }
 
-.llm-grader-capture-row span {
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+.llm-grader-result p {
+  margin: 6px 0;
+}
+
+.llm-grader-result ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.llm-grader-correct .llm-grader-verdict {
+  color: #71d99c;
+}
+
+.llm-grader-partial .llm-grader-verdict {
+  color: #ffd166;
+}
+
+.llm-grader-incorrect .llm-grader-verdict,
+.llm-grader-error {
+  color: #ff8585;
 }
 
 #llm-grader-grade-button {

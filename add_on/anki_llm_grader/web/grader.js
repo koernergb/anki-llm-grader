@@ -35,28 +35,45 @@
     };
   }
 
-  function row(label, value) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "llm-grader-capture-row";
-
-    const heading = document.createElement("strong");
-    heading.textContent = label;
-    const content = document.createElement("span");
-    content.textContent = value || "Not found";
-
-    wrapper.append(heading, content);
-    return wrapper;
-  }
-
-  function showCapture() {
+  function requestGrade() {
     const capture = captureCard();
     const output = document.getElementById("llm-grader-output");
-    output.replaceChildren(
-      row("Prompt", capture.prompt),
-      row("Answer key", capture.answer_key),
-      row("Your answer", capture.user_answer),
-      row("Rubric", capture.rubric)
-    );
+    output.textContent = "Grading…";
+    pycmd(`llmgrade:${encodeURIComponent(JSON.stringify(capture))}`);
+  }
+
+  function showResult(result) {
+    const output = document.getElementById("llm-grader-output");
+    if (!output) {
+      return;
+    }
+
+    if (result.error) {
+      output.className = "llm-grader-error";
+      output.textContent = result.error;
+      return;
+    }
+
+    const verdict = String(result.verdict || "unknown").toLowerCase();
+    output.className = `llm-grader-result llm-grader-${verdict}`;
+
+    const verdictLine = document.createElement("div");
+    verdictLine.className = "llm-grader-verdict";
+    verdictLine.textContent = `${verdict.toUpperCase()} · ${Math.round(
+      Number(result.score || 0) * 100
+    )}%`;
+
+    const feedback = document.createElement("p");
+    feedback.textContent = result.feedback_short || "No feedback returned.";
+
+    const missing = document.createElement("ul");
+    (result.missing_points || []).forEach((point) => {
+      const item = document.createElement("li");
+      item.textContent = point;
+      missing.appendChild(item);
+    });
+
+    output.replaceChildren(verdictLine, feedback, missing);
   }
 
   function mountPanel() {
@@ -83,7 +100,7 @@
     button.type = "button";
     button.textContent = "Grade with AI";
     button.title = "Capture card fields (Ctrl+Enter)";
-    button.addEventListener("click", showCapture);
+    button.addEventListener("click", requestGrade);
 
     panel.append(title, output, button);
     document.body.appendChild(panel);
@@ -93,11 +110,12 @@
     if (event.ctrlKey && event.key === "Enter") {
       event.preventDefault();
       mountPanel();
-      showCapture();
+      requestGrade();
     }
   });
 
   window.__llmGradeCaptureCard = captureCard;
+  window.__llmGradeShowResult = showResult;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", mountPanel, { once: true });
