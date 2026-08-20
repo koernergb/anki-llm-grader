@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
+from html.parser import HTMLParser
 import threading
 import time
 from typing import Any
@@ -39,6 +41,30 @@ RESULT_SCHEMA = {
 
 class GraderError(Exception):
     """An error that can be displayed safely in the reviewer."""
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def sanitize_text(value: Any, strip_html: bool, max_chars: int) -> str:
+    """Normalize untrusted card text before it leaves the machine."""
+    text = str(value or "")
+    if strip_html:
+        parser = _TextExtractor()
+        try:
+            parser.feed(text)
+            parser.close()
+            text = " ".join(parser.parts)
+        except Exception:
+            # A malformed fragment is still safe after escaping and truncation.
+            text = html.unescape(text)
+    return " ".join(text.split())[:max_chars]
 
 
 def validate_result(value: Any) -> dict[str, Any]:
@@ -83,6 +109,8 @@ class GroqGrader:
         timeout_seconds: float = 20,
         min_request_interval: float = 2,
         max_retries: int = 2,
+        strip_html: bool = True,
+        max_field_chars: int = 8000,
     ) -> None:
         self.api_key = api_key.strip()
         self.model = model
@@ -90,6 +118,8 @@ class GroqGrader:
         self.timeout_seconds = timeout_seconds
         self.min_request_interval = min_request_interval
         self.max_retries = max_retries
+        self.strip_html = strip_html
+        self.max_field_chars = max(100, min(50000, int(max_field_chars)))
         self._cache: dict[str, dict[str, Any]] = {}
         self._cache_lock = threading.Lock()
         self._rate_lock = threading.Lock()
@@ -104,7 +134,9 @@ class GroqGrader:
             )
 
         normalized = {
-            key: str(payload.get(key, ""))
+            key: sanitize_text(
+                payload.get(key, ""), self.strip_html, self.max_field_chars
+            )
             for key in ("prompt", "answer_key", "user_answer", "rubric")
         }
         if not normalized["user_answer"].strip():
@@ -135,7 +167,7 @@ class GroqGrader:
                 last_error = error
                 if error.code not in {408, 429, 500, 502, 503, 504}:
                     raise self._http_error(error) from error
-            except URLError as error:
+            except (URLError, TimeoutError) as error:
                 last_error = error
 
             if attempt < self.max_retries:
@@ -184,12 +216,20 @@ class GroqGrader:
             method="POST",
         )
         with urlopen(request, timeout=self.timeout_seconds) as response:
-            envelope = json.loads(response.read().decode("utf-8"))
+            try:
+                envelope = json.loads(response.read().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise GraderError("Groq returned an unreadable API response.") from error
 
         try:
             content = envelope["choices"][0]["message"]["content"]
             return validate_result(json.loads(content))
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+        except json.JSONDecodeError as error:
+            preview = str(content)[:240].replace("\n", " ")
+            raise GraderError(
+                f"Groq returned non-JSON output. Retry the grade. Response: {preview}"
+            ) from error
+        except (KeyError, IndexError, TypeError) as error:
             raise GraderError("Groq returned an unreadable response. Please retry.") from error
 
     @staticmethod

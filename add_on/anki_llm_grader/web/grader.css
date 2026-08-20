@@ -42,6 +42,36 @@
   padding-left: 20px;
 }
 
+.llm-grader-override-label {
+  margin-top: 10px;
+  color: #aaa;
+  font-size: 11px;
+}
+
+.llm-grader-overrides {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.llm-grader-overrides button {
+  padding: 5px 3px;
+  border: 1px solid #777;
+  border-radius: 5px;
+  background: transparent;
+  color: #ddd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.llm-grader-overrides button[aria-pressed="true"] {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
 .llm-grader-correct .llm-grader-verdict {
   color: #71d99c;
 }
@@ -69,6 +99,11 @@
 
 #llm-grader-grade-button:hover {
   background: #638cff;
+}
+
+#llm-grader-grade-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 #llm-grader-grade-button:focus-visible {

@@ -1,5 +1,8 @@
 {
   "groq_api_key": "",
   "model": "openai/gpt-oss-20b",
-  "strictness": 1
+  "strictness": 1,
+  "strip_html": true,
+  "max_field_chars": 8000,
+  "auto_grade_on_answer": false
 }

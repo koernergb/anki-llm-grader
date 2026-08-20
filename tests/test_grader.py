@@ -68,6 +68,23 @@ class GraderTests(unittest.TestCase):
         with self.assertRaises(grader.GraderError):
             FakeGrader().grade({"answer_key": "Answer", "user_answer": ""})
 
+    def test_sanitize_text_strips_html_and_limits_length(self):
+        self.assertEqual(
+            grader.sanitize_text("<b>Hello</b> &amp; goodbye", True, 12),
+            "Hello & good",
+        )
+
+    def test_score_is_clamped(self):
+        result = grader.validate_result(
+            {
+                "verdict": "correct",
+                "score": 2,
+                "missing_points": [],
+                "feedback_short": "Fine.",
+            }
+        )
+        self.assertEqual(result["score"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

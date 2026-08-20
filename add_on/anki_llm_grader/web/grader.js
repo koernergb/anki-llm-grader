@@ -7,6 +7,7 @@
     answerKey: "llm_answer_key",
     rubric: "llm_rubric",
   };
+  let latestRequestId = 0;
 
   function fieldText(id) {
     const element = document.getElementById(id);
@@ -38,7 +39,14 @@
   function requestGrade() {
     const capture = captureCard();
     const output = document.getElementById("llm-grader-output");
+    const button = document.getElementById("llm-grader-grade-button");
+    if (!output || !button || button.disabled) {
+      return;
+    }
+    capture.request_id = ++latestRequestId;
+    output.className = "";
     output.textContent = "Grading…";
+    button.disabled = true;
     pycmd(`llmgrade:${encodeURIComponent(JSON.stringify(capture))}`);
   }
 
@@ -47,6 +55,12 @@
     if (!output) {
       return;
     }
+    if (result.request_id !== latestRequestId) {
+      return;
+    }
+
+    const button = document.getElementById("llm-grader-grade-button");
+    button.disabled = false;
 
     if (result.error) {
       output.className = "llm-grader-error";
@@ -73,7 +87,47 @@
       missing.appendChild(item);
     });
 
-    output.replaceChildren(verdictLine, feedback, missing);
+    const overrideLabel = document.createElement("div");
+    overrideLabel.className = "llm-grader-override-label";
+    overrideLabel.textContent = "Override display (does not affect scheduling):";
+
+    const overrides = document.createElement("div");
+    overrides.className = "llm-grader-overrides";
+    ["correct", "partial", "incorrect"].forEach((choice) => {
+      const override = document.createElement("button");
+      override.type = "button";
+      override.textContent = choice[0].toUpperCase() + choice.slice(1);
+      override.setAttribute("aria-pressed", String(choice === verdict));
+      override.addEventListener("click", () => {
+        output.className = `llm-grader-result llm-grader-${choice}`;
+        verdictLine.textContent = `${choice.toUpperCase()} · manual override`;
+        overrides.querySelectorAll("button").forEach((candidate) => {
+          candidate.setAttribute("aria-pressed", String(candidate === override));
+        });
+      });
+      overrides.appendChild(override);
+    });
+
+    output.replaceChildren(
+      verdictLine,
+      feedback,
+      missing,
+      overrideLabel,
+      overrides
+    );
+  }
+
+  function resetPanel() {
+    latestRequestId += 1;
+    const output = document.getElementById("llm-grader-output");
+    const button = document.getElementById("llm-grader-grade-button");
+    if (output) {
+      output.className = "";
+      output.textContent = "Ready to grade this card.";
+    }
+    if (button) {
+      button.disabled = false;
+    }
   }
 
   function mountPanel() {
@@ -115,6 +169,8 @@
   });
 
   window.__llmGradeCaptureCard = captureCard;
+  window.__llmGradeRequest = requestGrade;
+  window.__llmGradeReset = resetPanel;
   window.__llmGradeShowResult = showResult;
 
   if (document.readyState === "loading") {

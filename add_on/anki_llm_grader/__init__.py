@@ -20,10 +20,17 @@ try:
 except (TypeError, ValueError):
     STRICTNESS = 1
 
+try:
+    MAX_FIELD_CHARS = int(CONFIG.get("max_field_chars", 8000))
+except (TypeError, ValueError):
+    MAX_FIELD_CHARS = 8000
+
 GRADER = GroqGrader(
     api_key=str(CONFIG.get("groq_api_key") or os.environ.get("GROQ_API_KEY", "")),
     model=str(CONFIG.get("model") or DEFAULT_MODEL),
     strictness=STRICTNESS,
+    strip_html=bool(CONFIG.get("strip_html", True)),
+    max_field_chars=MAX_FIELD_CHARS,
 )
 
 # Make the bundled reviewer assets available below /_addons/<package>/web/.
@@ -65,11 +72,13 @@ def _handle_js_message(
 
     def grade_in_background() -> dict[str, Any]:
         try:
-            return GRADER.grade(payload)
+            result = GRADER.grade(payload)
         except GraderError as error:
-            return {"error": str(error)}
+            result = {"error": str(error)}
         except Exception:
-            return {"error": "Unexpected grading error. Check Anki's console for details."}
+            result = {"error": "Unexpected grading error. Please retry."}
+        result["request_id"] = payload.get("request_id")
+        return result
 
     def show_result(future: Any) -> None:
         result = future.result()
@@ -81,5 +90,19 @@ def _handle_js_message(
     return (True, None)
 
 
+def _on_answer_shown(card: object) -> None:
+    """Optionally grade after Anki reveals the answer."""
+    if CONFIG.get("auto_grade_on_answer", False) and mw.state == "review":
+        mw.reviewer.web.eval("window.__llmGradeRequest?.();")
+
+
+def _on_question_shown(card: object) -> None:
+    """Clear the previous card's result when review advances."""
+    if mw.state == "review":
+        mw.reviewer.web.eval("window.__llmGradeReset?.();")
+
+
 gui_hooks.webview_will_set_content.append(_add_reviewer_assets)
 gui_hooks.webview_did_receive_js_message.append(_handle_js_message)
+gui_hooks.reviewer_did_show_answer.append(_on_answer_shown)
+gui_hooks.reviewer_did_show_question.append(_on_question_shown)

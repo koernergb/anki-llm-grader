@@ -1,19 +1,35 @@
 # Anki LLM Grader
 
-An Anki add-on that grades typed answers with Groq. The current M4 milestone
-adds native Anki configuration for the API key, model, and grading strictness.
+An Anki desktop add-on that grades typed answers with Groq and displays a
+Correct, Partial, or Incorrect verdict with concise feedback and missing points.
+It never changes Anki's scheduling decisions.
 
-## M0 installation
+## Features
 
-1. In Anki, open **Tools → Add-ons → View Files**.
+- Manual grading button and `Ctrl+Enter` shortcut
+- Optional grading when the answer is revealed
+- Structured Groq output with validation and understandable errors
+- Background requests that do not freeze Anki
+- Retry, request throttling, and an in-memory exact-match cache
+- Configurable model, strictness, HTML stripping, and field size limit
+- Local display-only verdict overrides
+
+## Install
+
+1. In Anki Desktop, open **Tools → Add-ons → View Files**.
 2. Copy or symlink `add_on/anki_llm_grader` into the displayed `addons21`
    directory.
-3. Restart Anki and begin reviewing a card.
-4. Confirm that **LLM Grader** appears at the lower-right of the reviewer.
+3. Restart Anki.
+4. Open **Tools → Add-ons**, select **Anki LLM Grader**, and click **Config**.
+5. Paste your Groq API key into `groq_api_key`, then restart Anki again.
+
+The key is stored as plaintext in Anki's local add-on configuration. To avoid
+storing it there, leave the setting empty and launch Anki with a
+`GROQ_API_KEY` environment variable.
 
 ## Card template
 
-Add these hidden elements to the front template of a typed-answer card:
+Add hidden elements to the front template of each supported typed-answer card:
 
 ```html
 <div id="llm_prompt" style="display:none">{{Front}}</div>
@@ -24,14 +40,33 @@ Add these hidden elements to the front template of a typed-answer card:
 {{type:TypedAnswer}}
 ```
 
-Omit `llm_rubric` if the note type has no rubric field.
+Replace the field names with those from your note type. Omit `llm_rubric` when
+there is no rubric field. The IDs themselves must remain unchanged.
 
-## Configuration
+## Use
 
-In Anki, open **Tools → Add-ons**, select **Anki LLM Grader**, and click
-**Config**. Add your Groq API key to `groq_api_key`; optionally change `model`
-or set `strictness` from `0` (lenient) through `2` (strict). Restart Anki after
-editing the configuration.
+During review, type an answer and click **Grade with AI** or press
+`Ctrl+Enter`. The panel shows the verdict, score, missing points, and feedback.
+Override buttons alter only the displayed verdict; they do not answer the card
+or modify its interval.
 
-You may leave `groq_api_key` empty and set the `GROQ_API_KEY` environment
-variable instead. Click **Grade with AI** or press **Ctrl+Enter** to grade.
+Available settings are documented beside Anki's Config editor. Automatic
+grading is off by default because it can increase latency and API usage.
+
+## Privacy and scope
+
+Each grading request sends the prompt, canonical answer, typed answer, and
+optional rubric to Groq. HTML is stripped and every field is limited to 8,000
+characters by default. Review card content before enabling the add-on for
+sensitive material.
+
+The add-on supports Anki Desktop only. It does not sync grading history,
+modify the scheduler, or support AnkiMobile/AnkiDroid.
+
+## Development
+
+Run the dependency-free unit suite with:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
