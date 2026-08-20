@@ -1,8 +1,7 @@
 # Anki LLM Grader
 
-An Anki add-on that grades typed answers with Groq. The current M3 milestone
-performs real grading on a background thread, validates structured results,
-retries transient failures, throttles requests, and caches exact repeats.
+An Anki add-on that grades typed answers with Groq. The current M4 milestone
+adds native Anki configuration for the API key, model, and grading strictness.
 
 ## M0 installation
 
@@ -27,8 +26,12 @@ Add these hidden elements to the front template of a typed-answer card:
 
 Omit `llm_rubric` if the note type has no rubric field.
 
-## Groq API key
+## Configuration
 
-Set the `GROQ_API_KEY` environment variable before launching Anki, then click
-**Grade with AI** or press **Ctrl+Enter**. M4 will add Anki-native configuration
-so an environment variable is no longer required.
+In Anki, open **Tools → Add-ons**, select **Anki LLM Grader**, and click
+**Config**. Add your Groq API key to `groq_api_key`; optionally change `model`
+or set `strictness` from `0` (lenient) through `2` (strict). Restart Anki after
+editing the configuration.
+
+You may leave `groq_api_key` empty and set the `GROQ_API_KEY` environment
+variable instead. Click **Grade with AI** or press **Ctrl+Enter** to grade.

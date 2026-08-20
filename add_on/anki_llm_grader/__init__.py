@@ -13,9 +13,17 @@ from .grader import DEFAULT_MODEL, GraderError, GroqGrader
 
 
 ADDON_PACKAGE = mw.addonManager.addonFromModule(__name__)
+CONFIG = mw.addonManager.getConfig(__name__) or {}
+
+try:
+    STRICTNESS = int(CONFIG.get("strictness", 1))
+except (TypeError, ValueError):
+    STRICTNESS = 1
+
 GRADER = GroqGrader(
-    api_key=os.environ.get("GROQ_API_KEY", ""),
-    model=DEFAULT_MODEL,
+    api_key=str(CONFIG.get("groq_api_key") or os.environ.get("GROQ_API_KEY", "")),
+    model=str(CONFIG.get("model") or DEFAULT_MODEL),
+    strictness=STRICTNESS,
 )
 
 # Make the bundled reviewer assets available below /_addons/<package>/web/.

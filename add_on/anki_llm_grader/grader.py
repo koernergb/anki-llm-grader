@@ -98,7 +98,10 @@ class GroqGrader:
     def grade(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Grade a payload, using an in-memory cache for exact repeats."""
         if not self.api_key:
-            raise GraderError("Missing Groq API key. Set GROQ_API_KEY and restart Anki.")
+            raise GraderError(
+                "Missing Groq API key. Open Tools → Add-ons → Anki LLM Grader "
+                "→ Config, add your key, and restart Anki."
+            )
 
         normalized = {
             key: str(payload.get(key, ""))
